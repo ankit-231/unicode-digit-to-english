@@ -7,5 +7,7 @@ Unicode digit to english digit converter and vice-versa,
 
 1,23,456.78 -> १,२३,४५६.७८
 
+Note: preserves comma (,), period (.) and new lines.
+
 # How to run
 - Download the `main.html` file and run it.
