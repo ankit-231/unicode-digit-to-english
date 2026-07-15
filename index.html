@@ -64,6 +64,28 @@
       opacity: .9;
     }
 
+    .toggles {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+      font-size: 14px;
+    }
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .toggle-label input {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
     textarea {
       width: 100%;
       height: 220px;
@@ -97,6 +119,14 @@
       background: #125ca3;
     }
 
+    button.action.secondary {
+      background: #546e7a;
+    }
+
+    button.action.secondary:hover {
+      background: #3e5259;
+    }
+
     .toast {
       position: fixed;
       bottom: 25px;
@@ -123,6 +153,22 @@
       justify-content: space-between;
       margin-bottom: 8px;
       font-weight: bold;
+    }
+
+    footer {
+      margin-top: 20px;
+      font-size: 13px;
+      color: #888;
+      text-align: center;
+    }
+
+    footer a {
+      color: #1976d2;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
     }
 
     @media(max-width:600px) {
@@ -162,6 +208,17 @@
       </button>
     </div>
 
+    <div class="toggles">
+      <label class="toggle-label">
+        <input type="checkbox" id="liveToggle" onchange="onLiveToggleChange()">
+        Convert as you go (live)
+      </label>
+      <label class="toggle-label">
+        <input type="checkbox" id="pasteToggle" onchange="onPasteToggleChange()">
+        Paste to convert &amp; copy
+      </label>
+    </div>
+
     <div class="labels">
       <span id="inputLabel">Input (Nepali Digits)</span>
       <span id="outputLabel">Output (English Digits)</span>
@@ -174,10 +231,17 @@
       <button class="action" onclick="convertAndCopy()">Convert & Copy</button>
       <button class="action" onclick="copyResult()">Copy Result</button>
       <button class="action" onclick="swapMode()">⇄ Swap Direction</button>
+      <button class="action secondary" onclick="forceConvertAll()">⚡ Force Convert All (→ English)</button>
       <button class="action" onclick="clearAll()">Clear</button>
     </div>
 
     <textarea id="output" placeholder="Result..." readonly></textarea>
+
+    <footer>
+      <a href="https://github.com/ankit-231/unicode-digit-to-english" target="_blank" rel="noopener noreferrer">
+        View on GitHub
+      </a>
+    </footer>
 
   </div>
 
@@ -185,6 +249,7 @@
 
   <script>
     let mode = "ne-en";
+    const STORAGE_KEY = "digitConverterState";
 
     const neToEn = {
       '०': '0',
@@ -212,7 +277,7 @@
       '9': '९'
     };
 
-    function setMode(newMode) {
+    function setMode(newMode, opts = {}) {
       mode = newMode;
 
       document.getElementById("neToEnBtn").classList.toggle("active", mode === "ne-en");
@@ -228,7 +293,11 @@
         input.placeholder = "Paste English digits here...\n\n38,180.63";
       }
 
-      output.value = "";
+      if (!opts.preserveOutput) {
+        output.value = "";
+      }
+
+      saveState();
     }
 
     function swapMode() {
@@ -251,6 +320,19 @@
       }
 
       output.value = result;
+      saveState();
+      return result;
+    }
+
+    function forceConvertAll() {
+      // Normalizes every digit in the text to English digits,
+      // regardless of the currently selected mode.
+      const text = input.value;
+      const result = text.replace(/[०-९]/g, d => neToEn[d]);
+
+      output.value = result;
+      showToast("Force converted all digits to English");
+      saveState();
     }
 
     function showToast(message, color = "#2e7d32") {
@@ -294,9 +376,77 @@
       input.value = "";
       output.value = "";
       input.focus();
+      saveState();
     }
 
-    setMode("ne-en");
+    // ---- Live "convert as you go" mode ----
+    function onLiveToggleChange() {
+      saveState();
+    }
+
+    // ---- "Paste to convert & copy" mode ----
+    function onPasteToggleChange() {
+      saveState();
+    }
+
+    function handleInputEvent() {
+      if (document.getElementById("liveToggle").checked) {
+        convert();
+      } else {
+        saveState();
+      }
+    }
+
+    function handlePasteEvent() {
+      if (document.getElementById("pasteToggle").checked) {
+        // wait for the pasted content to actually land in the textarea
+        setTimeout(() => {
+          convertAndCopy();
+        }, 0);
+      }
+    }
+
+    // ---- sessionStorage persistence ----
+    function saveState() {
+      try {
+        const state = {
+          mode,
+          liveMode: document.getElementById("liveToggle").checked,
+          pasteMode: document.getElementById("pasteToggle").checked,
+          inputText: input.value,
+          outputText: output.value
+        };
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {
+        // sessionStorage unavailable (e.g. private browsing) - fail silently
+      }
+    }
+
+    function restoreState() {
+      let state = null;
+      try {
+        const raw = sessionStorage.getItem(STORAGE_KEY);
+        if (raw) state = JSON.parse(raw);
+      } catch (e) {
+        state = null;
+      }
+
+      if (state) {
+        setMode(state.mode || "ne-en", { preserveOutput: true });
+        document.getElementById("liveToggle").checked = !!state.liveMode;
+        document.getElementById("pasteToggle").checked = !!state.pasteMode;
+        input.value = state.inputText || "";
+        output.value = state.outputText || "";
+      } else {
+        setMode("ne-en");
+      }
+    }
+
+    input.addEventListener("input", handleInputEvent);
+    input.addEventListener("paste", handlePasteEvent);
+
+    restoreState();
+    input.focus();
   </script>
 
 </body>
