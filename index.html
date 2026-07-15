@@ -249,7 +249,8 @@
 
   <script>
     let mode = "ne-en";
-    const STORAGE_KEY = "digitConverterState";
+    const TOGGLE_KEY = "digitConverterToggles"; // localStorage - survives closing the tab/browser
+    const TEXT_KEY = "digitConverterText";       // localStorage - survives closing the tab/browser
 
     const neToEn = {
       '०': '0',
@@ -297,7 +298,12 @@
         output.value = "";
       }
 
-      saveState();
+      // skipSave is used during restoreState() so we don't overwrite storage
+      // with textarea values that haven't been restored yet.
+      if (!opts.skipSave) {
+        saveToggles();
+        saveText();
+      }
     }
 
     function swapMode() {
@@ -320,7 +326,7 @@
       }
 
       output.value = result;
-      saveState();
+      saveText();
       return result;
     }
 
@@ -332,7 +338,7 @@
 
       output.value = result;
       showToast("Force converted all digits to English");
-      saveState();
+      saveText();
     }
 
     function showToast(message, color = "#2e7d32") {
@@ -376,24 +382,24 @@
       input.value = "";
       output.value = "";
       input.focus();
-      saveState();
+      saveText();
     }
 
     // ---- Live "convert as you go" mode ----
     function onLiveToggleChange() {
-      saveState();
+      saveToggles();
     }
 
     // ---- "Paste to convert & copy" mode ----
     function onPasteToggleChange() {
-      saveState();
+      saveToggles();
     }
 
     function handleInputEvent() {
       if (document.getElementById("liveToggle").checked) {
-        convert();
+        convert(); // convert() already calls saveText()
       } else {
-        saveState();
+        saveText();
       }
     }
 
@@ -406,40 +412,57 @@
       }
     }
 
-    // ---- sessionStorage persistence ----
-    function saveState() {
+    // ---- persistence: toggles/mode in localStorage, text in sessionStorage ----
+    function saveToggles() {
       try {
-        const state = {
+        const toggles = {
           mode,
           liveMode: document.getElementById("liveToggle").checked,
-          pasteMode: document.getElementById("pasteToggle").checked,
+          pasteMode: document.getElementById("pasteToggle").checked
+        };
+        localStorage.setItem(TOGGLE_KEY, JSON.stringify(toggles));
+      } catch (e) {
+        // localStorage unavailable (e.g. private browsing) - fail silently
+      }
+    }
+
+    function saveText() {
+      try {
+        const text = {
           inputText: input.value,
           outputText: output.value
         };
-        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        localStorage.setItem(TEXT_KEY, JSON.stringify(text));
       } catch (e) {
-        // sessionStorage unavailable (e.g. private browsing) - fail silently
+        // localStorage unavailable - fail silently
       }
     }
 
     function restoreState() {
-      let state = null;
+      let toggles = null;
       try {
-        const raw = sessionStorage.getItem(STORAGE_KEY);
-        if (raw) state = JSON.parse(raw);
+        const raw = localStorage.getItem(TOGGLE_KEY);
+        if (raw) toggles = JSON.parse(raw);
       } catch (e) {
-        state = null;
+        toggles = null;
       }
 
-      if (state) {
-        setMode(state.mode || "ne-en", { preserveOutput: true });
-        document.getElementById("liveToggle").checked = !!state.liveMode;
-        document.getElementById("pasteToggle").checked = !!state.pasteMode;
-        input.value = state.inputText || "";
-        output.value = state.outputText || "";
-      } else {
-        setMode("ne-en");
+      let text = null;
+      try {
+        const raw = localStorage.getItem(TEXT_KEY);
+        if (raw) text = JSON.parse(raw);
+      } catch (e) {
+        text = null;
       }
+
+      // skipSave: true - avoid overwriting storage before text is restored below
+      setMode((toggles && toggles.mode) || "ne-en", { preserveOutput: true, skipSave: true });
+
+      document.getElementById("liveToggle").checked = !!(toggles && toggles.liveMode);
+      document.getElementById("pasteToggle").checked = !!(toggles && toggles.pasteMode);
+
+      input.value = (text && text.inputText) || "";
+      output.value = (text && text.outputText) || "";
     }
 
     input.addEventListener("input", handleInputEvent);
