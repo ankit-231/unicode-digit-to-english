@@ -217,6 +217,10 @@
         <input type="checkbox" id="pasteToggle" onchange="onPasteToggleChange()">
         Paste to convert &amp; copy
       </label>
+      <label class="toggle-label">
+        <input type="checkbox" id="saveInputToggle" onchange="onSaveInputToggleChange()">
+        Save typed input/output to local storage
+      </label>
     </div>
 
     <div class="labels">
@@ -395,6 +399,22 @@
       saveToggles();
     }
 
+    // ---- opt-in text saving ----
+    function onSaveInputToggleChange() {
+      const checked = document.getElementById("saveInputToggle").checked;
+      saveToggles();
+
+      if (checked) {
+        saveText(); // start persisting current text right away
+      } else {
+        try {
+          localStorage.removeItem(TEXT_KEY); // stop persisting, clear anything already saved
+        } catch (e) {
+          // localStorage unavailable - fail silently
+        }
+      }
+    }
+
     function handleInputEvent() {
       if (document.getElementById("liveToggle").checked) {
         convert(); // convert() already calls saveText()
@@ -418,7 +438,8 @@
         const toggles = {
           mode,
           liveMode: document.getElementById("liveToggle").checked,
-          pasteMode: document.getElementById("pasteToggle").checked
+          pasteMode: document.getElementById("pasteToggle").checked,
+          saveInputMode: document.getElementById("saveInputToggle").checked
         };
         localStorage.setItem(TOGGLE_KEY, JSON.stringify(toggles));
       } catch (e) {
@@ -427,6 +448,9 @@
     }
 
     function saveText() {
+      if (!document.getElementById("saveInputToggle").checked) {
+        return; // opted out - don't persist typed input/output
+      }
       try {
         const text = {
           inputText: input.value,
@@ -460,9 +484,12 @@
 
       document.getElementById("liveToggle").checked = !!(toggles && toggles.liveMode);
       document.getElementById("pasteToggle").checked = !!(toggles && toggles.pasteMode);
+      document.getElementById("saveInputToggle").checked = !!(toggles && toggles.saveInputMode);
 
-      input.value = (text && text.inputText) || "";
-      output.value = (text && text.outputText) || "";
+      if (document.getElementById("saveInputToggle").checked) {
+        input.value = (text && text.inputText) || "";
+        output.value = (text && text.outputText) || "";
+      }
     }
 
     input.addEventListener("input", handleInputEvent);
